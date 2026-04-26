@@ -99,7 +99,7 @@ def get_number_of_likes(post_id: str) -> int:
 
 @mcp.tool()
 def get_post_insights(post_id: str) -> dict[str, Any]:
-    """Fetch all insights metrics (impressions, reactions, clicks, etc).
+    """Fetch all insights metrics (views, reactions, clicks, activity, etc).
     Input: post_id (str)
     Output: dict with multiple metrics and their values
     """
@@ -107,15 +107,15 @@ def get_post_insights(post_id: str) -> dict[str, Any]:
 
 @mcp.tool()
 def get_post_impressions(post_id: str) -> dict[str, Any]:
-    """Fetch total impressions of a post.
+    """Fetch total views of a post (uses post_media_view metric).
     Input: post_id (str)
-    Output: dict with total impression count
+    Output: dict with total view count
     """
     return manager.get_post_impressions(post_id)
 
 @mcp.tool()
 def get_post_impressions_unique(post_id: str) -> dict[str, Any]:
-    """Fetch unique impressions of a post.
+    """Fetch unique reach of a post.
     Input: post_id (str)
     Output: dict with unique impression count
     """
@@ -123,27 +123,35 @@ def get_post_impressions_unique(post_id: str) -> dict[str, Any]:
 
 @mcp.tool()
 def get_post_impressions_paid(post_id: str) -> dict[str, Any]:
-    """Fetch paid impressions of a post.
+    """Fetch paid views of a post (uses post_media_view metric).
     Input: post_id (str)
-    Output: dict with paid impression count
+    Output: dict with paid view count
     """
     return manager.get_post_impressions_paid(post_id)
 
 @mcp.tool()
 def get_post_impressions_organic(post_id: str) -> dict[str, Any]:
-    """Fetch organic impressions of a post.
+    """Fetch organic views of a post (uses post_media_view metric).
     Input: post_id (str)
-    Output: dict with organic impression count
+    Output: dict with organic view count
     """
     return manager.get_post_impressions_organic(post_id)
 
 @mcp.tool()
 def get_post_engaged_users(post_id: str) -> dict[str, Any]:
-    """Fetch number of engaged users.
+    """Fetch post activity count (uses post_activity metric, replaces deprecated post_engaged_users).
     Input: post_id (str)
-    Output: dict with engagement count
+    Output: dict with activity count
     """
     return manager.get_post_engaged_users(post_id)
+
+@mcp.tool()
+def get_post_activity(post_id: str) -> dict[str, Any]:
+    """Fetch post activity breakdown by action type (likes, comments, shares, etc).
+    Input: post_id (str)
+    Output: dict with activity breakdown
+    """
+    return manager.get_post_activity(post_id)
 
 @mcp.tool()
 def get_post_clicks(post_id: str) -> dict[str, Any]:

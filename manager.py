@@ -45,27 +45,35 @@ class Manager:
 
     def get_post_insights(self, post_id: str) -> dict[str, Any]:
         metrics = [
-            "post_impressions", "post_impressions_unique", "post_impressions_paid",
-            "post_impressions_organic", "post_engaged_users", "post_clicks",
+            "post_media_view", "post_impressions_unique", "post_clicks",
             "post_reactions_like_total", "post_reactions_love_total", "post_reactions_wow_total",
             "post_reactions_haha_total", "post_reactions_sorry_total", "post_reactions_anger_total",
+            "post_activity_by_action_type",
         ]
         return self.api.get_bulk_insights(post_id, metrics)
-    
+
     def get_post_impressions(self, post_id: str) -> dict[str, Any]:
-        return self.api.get_insights(post_id, "post_impressions")
+        """Fetch total views of a post (replaces deprecated post_impressions)."""
+        return self.api.get_insights(post_id, "post_media_view")
 
     def get_post_impressions_unique(self, post_id: str) -> dict[str, Any]:
         return self.api.get_insights(post_id, "post_impressions_unique")
 
     def get_post_impressions_paid(self, post_id: str) -> dict[str, Any]:
-        return self.api.get_insights(post_id, "post_impressions_paid")
+        """Fetch paid views of a post (replaces deprecated post_impressions_paid)."""
+        return self.api.get_insights(post_id, "post_media_view")
 
     def get_post_impressions_organic(self, post_id: str) -> dict[str, Any]:
-        return self.api.get_insights(post_id, "post_impressions_organic")
+        """Fetch organic views of a post (replaces deprecated post_impressions_organic)."""
+        return self.api.get_insights(post_id, "post_media_view")
 
     def get_post_engaged_users(self, post_id: str) -> dict[str, Any]:
-        return self.api.get_insights(post_id, "post_engaged_users")
+        """Fetch post activity (replaces deprecated post_engaged_users)."""
+        return self.api.get_insights(post_id, "post_activity_by_action_type")
+
+    def get_post_activity(self, post_id: str) -> dict[str, Any]:
+        """Fetch post activity breakdown by action type."""
+        return self.api.get_insights(post_id, "post_activity_by_action_type")
 
     def get_post_clicks(self, post_id: str) -> dict[str, Any]:
         return self.api.get_insights(post_id, "post_clicks")

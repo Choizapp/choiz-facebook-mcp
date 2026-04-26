@@ -18,7 +18,9 @@ class FacebookAPI:
         return self._request("POST", f"{comment_id}/comments", {"message": message})
 
     def get_posts(self) -> dict[str, Any]:
-        return self._request("GET", f"{PAGE_ID}/posts", {"fields": "id,message,created_time"})
+        return self._request("GET", f"{PAGE_ID}/posts", {
+            "fields": "id,message,created_time,permalink_url,shares,full_picture,attachments{type,media_type,title,description}"
+        })
 
     def get_comments(self, post_id: str) -> dict[str, Any]:
         return self._request("GET", f"{post_id}/comments", {"fields": "id,message,from,created_time"})
