@@ -82,20 +82,20 @@ def filter_negative_comments(comments: dict[str, Any]) -> list[dict[str, Any]]:
     return manager.filter_negative_comments(comments)
 
 @mcp.tool()
-def get_number_of_comments(post_id: str) -> int:
+def get_number_of_comments(post_id: str) -> str:
     """Count the number of comments on a given post.
     Input: post_id (str)
     Output: integer count of comments
     """
-    return manager.get_number_of_comments(post_id)
+    return str(manager.get_number_of_comments(post_id))
 
 @mcp.tool()
-def get_number_of_likes(post_id: str) -> int:
+def get_number_of_likes(post_id: str) -> str:
     """Return the number of likes on a post.
     Input: post_id (str)
     Output: integer count of likes
     """
-    return manager.get_number_of_likes(post_id)
+    return str(manager.get_number_of_likes(post_id))
 
 @mcp.tool()
 def get_post_insights(post_id: str) -> dict[str, Any]:
@@ -249,20 +249,20 @@ def schedule_post(message: str, publish_time: int) -> dict[str, Any]:
     return manager.schedule_post(message, publish_time)
 
 @mcp.tool()
-def get_page_fan_count() -> int:
+def get_page_fan_count() -> str:
     """Get the Page's total fan/like count.
     Input: None
     Output: integer fan count
     """
-    return manager.get_page_fan_count()
+    return str(manager.get_page_fan_count())
 
 @mcp.tool()
-def get_post_share_count(post_id: str) -> int:
+def get_post_share_count(post_id: str) -> str:
     """Get the number of shares for a post.
     Input: post_id (str)
     Output: integer share count
     """
-    return manager.get_post_share_count(post_id)
+    return str(manager.get_post_share_count(post_id))
 
 
 @mcp.tool()
