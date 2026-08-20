@@ -30,7 +30,9 @@ def get_page_posts(
 ) -> dict[str, Any]:
     """Fetch posts from the Page, newest first, past Graph's 25-post default.
     Input:
-      limit (int, default 25, max 200) - how many posts to return.
+      limit (int, default 25, max 200) - how many posts to return. Responses
+        grow with it: ~17 KB at 25, ~184 KB at 200. Prefer a date window over
+        a large limit when you only need a specific period.
       since (str, optional) - start of a date window: "YYYY-MM-DD" or a unix timestamp.
       until (str, optional) - end of that window, same formats. Meta recommends
         windows of six months or less.
