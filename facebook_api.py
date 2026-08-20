@@ -45,9 +45,11 @@ def _strip_paging_urls(node: Any) -> Any:
     return cleaned
 
 
-# Hard ceiling on how many posts a single call may return. Trimmed posts run
-# ~300 bytes each, so 200 is roughly 60 KB -- past that a single tool result
-# gets unwieldy for a client to consume in one turn.
+# Hard ceiling on how many posts a single call may return. Measured against the
+# Choiz page (2026-08-20): a trimmed post averages ~920 bytes, mostly message
+# body, so 25 posts is ~17 KB and 200 is ~184 KB. 200 is therefore a large
+# response and only ever reached when a caller explicitly asks for it -- the
+# default stays at 25.
 MAX_POSTS = 200
 
 # Graph caps `limit` on the posts edge at 100 per request.
@@ -59,9 +61,9 @@ _GRAPH_PAGE_SIZE = 100
 _MAX_PAGES = 10
 
 # full_picture is deliberately absent: each is a ~750-character signed CDN URL
-# that more than doubles the payload and expires anyway. It is opt-in via
-# include_images. permalink_url stays -- short, stable, and what a human needs
-# to actually open the post.
+# that expires anyway, and it accounted for roughly half the bytes of the old
+# untrimmed response. It is opt-in via include_images. permalink_url stays --
+# short, stable, and what a human needs to actually open the post.
 _POST_FIELDS = (
     "id",
     "message",
