@@ -12,8 +12,16 @@ class Manager:
     def reply_to_comment(self, post_id: str, comment_id: str, message: str) -> dict[str, Any]:
         return self.api.reply_to_comment(comment_id, message)
 
-    def get_page_posts(self) -> dict[str, Any]:
-        return self.api.get_posts()
+    def get_page_posts(
+        self,
+        limit: int = 25,
+        since: Any = None,
+        until: Any = None,
+        include_images: bool = False,
+    ) -> dict[str, Any]:
+        return self.api.get_posts(
+            limit=limit, since=since, until=until, include_images=include_images
+        )
 
     def get_post_comments(self, post_id: str) -> dict[str, Any]:
         return self.api.get_comments(post_id)
