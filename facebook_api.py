@@ -2,6 +2,47 @@ import requests
 from typing import Any
 from config import GRAPH_API_BASE_URL, PAGE_ID, PAGE_ACCESS_TOKEN
 
+# Keys whose values are fully-formed Graph API URLs with the token in the query
+# string. Graph puts them under every "paging" object it returns.
+_PAGING_URL_KEYS = ("next", "previous")
+
+
+def _strip_paging_urls(node: Any) -> Any:
+    """Recursively drop Graph API paging URLs, which embed the Page token.
+
+    Graph returns ``paging.next``/``paging.previous`` as ready-to-call URLs with
+    ``access_token=<PAGE_ACCESS_TOKEN>`` in the query string. Whatever _request
+    returns goes straight back to the MCP client, so handing those URLs over
+    verbatim leaks the Page access token into a third-party chat transcript on
+    every call to a paginated edge. Today that is get_page_posts,
+    get_post_comments and get_post_insights, plus anything paginated added
+    later -- which is why this is enforced here in the transport rather than
+    per tool.
+
+    The opaque cursors under ``paging.cursors`` carry no credentials, so they
+    are kept: they are what a caller needs to page forward, by passing the
+    cursor back as an ``after`` parameter. ``has_next`` replaces the stripped
+    ``next`` URL so callers can still tell whether more data exists.
+
+    Nested edges (comments inside posts, attachments inside comments) get their
+    own paging blocks, hence the recursion.
+    """
+    if isinstance(node, list):
+        return [_strip_paging_urls(item) for item in node]
+    if not isinstance(node, dict):
+        return node
+
+    cleaned = {key: _strip_paging_urls(value) for key, value in node.items()}
+
+    paging = cleaned.get("paging")
+    if isinstance(paging, dict):
+        safe = {k: v for k, v in paging.items() if k not in _PAGING_URL_KEYS}
+        if paging.get("next"):
+            safe["has_next"] = True
+        cleaned["paging"] = safe
+
+    return cleaned
+
 
 class FacebookAPI:
     # Generic Graph API request method
@@ -9,7 +50,8 @@ class FacebookAPI:
         url = f"{GRAPH_API_BASE_URL}/{endpoint}"
         params["access_token"] = PAGE_ACCESS_TOKEN
         response = requests.request(method, url, params=params, json=json)
-        return response.json()
+        # Never hand Graph's paging URLs to the caller: they carry the token.
+        return _strip_paging_urls(response.json())
 
     def post_message(self, message: str) -> dict[str, Any]:
         return self._request("POST", f"{PAGE_ID}/feed", {"message": message})
