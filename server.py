@@ -22,12 +22,30 @@ def reply_to_comment(post_id: str, comment_id: str, message: str) -> dict[str, A
     return manager.reply_to_comment(post_id, comment_id, message)
 
 @mcp.tool()
-def get_page_posts() -> dict[str, Any]:
-    """Fetch the most recent posts on the Page.
-    Input: None
-    Output: dict with list of post objects and metadata
+def get_page_posts(
+    limit: int = 25,
+    since: str = "",
+    until: str = "",
+    include_images: bool = False,
+) -> dict[str, Any]:
+    """Fetch posts from the Page, newest first, past Graph's 25-post default.
+    Input:
+      limit (int, default 25, max 200) - how many posts to return.
+      since (str, optional) - start of a date window: "YYYY-MM-DD" or a unix timestamp.
+      until (str, optional) - end of that window, same formats. Meta recommends
+        windows of six months or less.
+      include_images (bool, default False) - include full_picture CDN URLs. Off by
+        default because each is ~750 characters and they expire; permalink_url is
+        always present and is what you need to open a post.
+    Output: dict with `data` (posts: id, message, created_time, permalink_url,
+      shares, attachments), plus `count`, `pages_fetched` and `reached_oldest_post`.
     """
-    return manager.get_page_posts()
+    return manager.get_page_posts(
+        limit=limit,
+        since=since or None,
+        until=until or None,
+        include_images=include_images,
+    )
 
 @mcp.tool()
 def get_post_comments(post_id: str) -> dict[str, Any]:

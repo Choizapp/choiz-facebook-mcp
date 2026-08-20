@@ -1,4 +1,5 @@
 import requests
+from datetime import datetime, timezone
 from typing import Any
 from config import GRAPH_API_BASE_URL, PAGE_ID, PAGE_ACCESS_TOKEN
 
@@ -44,6 +45,82 @@ def _strip_paging_urls(node: Any) -> Any:
     return cleaned
 
 
+# Hard ceiling on how many posts a single call may return. Trimmed posts run
+# ~300 bytes each, so 200 is roughly 60 KB -- past that a single tool result
+# gets unwieldy for a client to consume in one turn.
+MAX_POSTS = 200
+
+# Graph caps `limit` on the posts edge at 100 per request.
+_GRAPH_PAGE_SIZE = 100
+
+# Bound on round-trips per call. Normally MAX_POSTS/_GRAPH_PAGE_SIZE = 2 pages,
+# but a since/until window can yield sparse pages, so allow slack while still
+# refusing to loop forever.
+_MAX_PAGES = 10
+
+# full_picture is deliberately absent: each is a ~750-character signed CDN URL
+# that more than doubles the payload and expires anyway. It is opt-in via
+# include_images. permalink_url stays -- short, stable, and what a human needs
+# to actually open the post.
+_POST_FIELDS = (
+    "id",
+    "message",
+    "created_time",
+    "permalink_url",
+    "shares",
+    "attachments{type,media_type,title,description}",
+)
+
+
+def _parse_time_bound(value: Any) -> Any:
+    """Best-effort parse of a since/until bound into an aware datetime.
+
+    Accepts what Graph accepts -- a unix timestamp or a date string -- and
+    returns None when it cannot tell, in which case the local re-filter simply
+    does not apply that bound.
+    """
+    if value is None or value == "" or isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)) or (
+        isinstance(value, str) and value.strip().lstrip("-").isdigit()
+    ):
+        try:
+            return datetime.fromtimestamp(int(value), tz=timezone.utc)
+        except (ValueError, OverflowError, OSError):
+            return None
+    try:
+        parsed = datetime.fromisoformat(str(value).strip())
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+
+
+def _within_window(post: Any, since_dt: Any, until_dt: Any) -> bool:
+    """Whether a post falls inside [since_dt, until_dt].
+
+    Anything unparseable is kept rather than silently dropped: a missing or odd
+    created_time is not grounds for hiding a post from the caller.
+    """
+    if since_dt is None and until_dt is None:
+        return True
+    if not isinstance(post, dict):
+        return True
+    raw = post.get("created_time")
+    if not raw:
+        return True
+    try:
+        created = datetime.fromisoformat(str(raw))
+    except (TypeError, ValueError):
+        return True
+    if created.tzinfo is None:
+        created = created.replace(tzinfo=timezone.utc)
+    if since_dt is not None and created < since_dt:
+        return False
+    if until_dt is not None and created > until_dt:
+        return False
+    return True
+
+
 class FacebookAPI:
     # Generic Graph API request method
     def _request(self, method: str, endpoint: str, params: dict[str, Any], json: dict[str, Any] = None) -> dict[str, Any]:
@@ -59,10 +136,102 @@ class FacebookAPI:
     def reply_to_comment(self, comment_id: str, message: str) -> dict[str, Any]:
         return self._request("POST", f"{comment_id}/comments", {"message": message})
 
-    def get_posts(self) -> dict[str, Any]:
-        return self._request("GET", f"{PAGE_ID}/posts", {
-            "fields": "id,message,created_time,permalink_url,shares,full_picture,attachments{type,media_type,title,description}"
-        })
+    def get_posts(
+        self,
+        limit: int = 25,
+        since: Any = None,
+        until: Any = None,
+        include_images: bool = False,
+    ) -> dict[str, Any]:
+        """Fetch Page posts, walking Graph's cursors until `limit` is met.
+
+        Graph defaults the posts edge to 25 per page -- that default is where
+        the old "only the last 25 posts" behaviour came from. This paginates
+        instead of exposing a raw cursor to the MCP client, which would mean
+        threading an 800-character opaque string back and forth between turns.
+
+        Pagination follows `paging.cursors.after`, not `paging.next`, because
+        _strip_paging_urls removes the next URL (it embeds the access token).
+        The two are equivalent: the URL Graph builds for `next` is this same
+        request plus `&after=<cursor>`.
+
+        since/until are passed through to Graph, which documents time-based
+        pagination but does not enumerate which edges honour it. The window is
+        therefore re-applied locally on the way out, so the result respects the
+        caller's dates whether or not the edge filtered server-side.
+        """
+        try:
+            limit = int(limit)
+        except (TypeError, ValueError):
+            limit = 25
+        limit = max(1, min(limit, MAX_POSTS))
+
+        fields = list(_POST_FIELDS)
+        if include_images:
+            fields.append("full_picture")
+
+        base_params: dict[str, Any] = {
+            "fields": ",".join(fields),
+            "limit": min(limit, _GRAPH_PAGE_SIZE),
+        }
+        if since:
+            base_params["since"] = since
+        if until:
+            base_params["until"] = until
+
+        since_dt = _parse_time_bound(since)
+        until_dt = _parse_time_bound(until)
+
+        posts: list[Any] = []
+        after: Any = None
+        pages = 0
+        exhausted = False
+
+        while len(posts) < limit and pages < _MAX_PAGES:
+            params = dict(base_params)
+            if after:
+                params["after"] = after
+
+            payload = self._request("GET", f"{PAGE_ID}/posts", params)
+            pages += 1
+
+            # Surface Graph errors (bad token, invalid window) untouched rather
+            # than returning a confusingly empty list.
+            if isinstance(payload, dict) and payload.get("error"):
+                return payload
+            if not isinstance(payload, dict):
+                break
+
+            posts.extend(
+                post
+                for post in (payload.get("data") or [])
+                if _within_window(post, since_dt, until_dt)
+            )
+
+            paging = payload.get("paging") or {}
+            if not paging.get("has_next"):
+                exhausted = True
+                break
+            after = (paging.get("cursors") or {}).get("after")
+            if not after:
+                exhausted = True
+                break
+
+        returned = posts[:limit]
+        result: dict[str, Any] = {
+            "data": returned,
+            "count": len(returned),
+            "pages_fetched": pages,
+            # True only when we ran out of posts rather than hitting `limit`, so
+            # a caller can tell "that is all there is" from "there may be more".
+            "reached_oldest_post": exhausted and len(posts) <= limit,
+        }
+        if not include_images:
+            result["note"] = (
+                "Image URLs omitted to keep the response small; pass "
+                "include_images=true if you need full_picture."
+            )
+        return result
 
     def get_comments(self, post_id: str) -> dict[str, Any]:
         return self._request("GET", f"{post_id}/comments", {"fields": "id,message,from,created_time"})
